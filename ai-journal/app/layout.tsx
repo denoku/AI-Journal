@@ -3,6 +3,7 @@ import "./globals.css";
 import { auth } from "@/lib/auth";
 import NavBar from "@/components/NavBar";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "Brian's Journal",
@@ -31,6 +32,7 @@ export default async function RootLayout({
     <html lang="en" className="dark">
       <body className="min-h-screen bg-background font-mono antialiased">
         <ServiceWorkerRegistrar />
+        <Toaster />
         {session && <NavBar />}
         <main className="pb-safe">{children}</main>
       </body>

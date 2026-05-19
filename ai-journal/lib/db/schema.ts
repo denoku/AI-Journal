@@ -53,7 +53,30 @@ export const recipes = pgTable("recipes", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const coffeeLogs = pgTable(
+  "coffee_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    slot: text("slot").notNull().$type<"morning" | "afternoon">(),
+    beans: text("beans"), // e.g. "Ethiopia Yirgacheffe - Onyx"
+    roaster: text("roaster"), // e.g. "Onyx Coffee Lab"
+    doseG: text("dose_g"), // grams in (as text for flexibility e.g. "18.5")
+    yieldG: text("yield_g"), // grams out
+    timeSec: text("time_sec"), // pull time in seconds
+    grindSetting: text("grind_setting"), // e.g. "15" or "fine"
+    tastingNotes: text("tasting_notes"), // free text
+    rating: text("rating"), // "1"–"5"
+    brewMethod: text("brew_method"), // "espresso" | "pour over" | "aeropress" etc
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique().on(t.userId, t.date, t.slot)],
+);
+
 export type JournalEntry = InferSelectModel<typeof journalEntries>;
 export type Meals = NonNullable<JournalEntry["meals"]>;
 export type Recipe = InferSelectModel<typeof recipes>;
 export type ChatMessage = InferSelectModel<typeof chatMessages>;
+export type CoffeeLog = InferSelectModel<typeof coffeeLogs>;
