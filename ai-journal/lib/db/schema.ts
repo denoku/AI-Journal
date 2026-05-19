@@ -1,0 +1,59 @@
+import {
+  pgTable,
+  serial,
+  text,
+  jsonb,
+  timestamp,
+  unique,
+} from "drizzle-orm/pg-core";
+import { InferSelectModel } from "drizzle-orm";
+
+export const journalEntries = pgTable(
+  "journal_entries",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    morningNote: text("morning_note"),
+    intentions: jsonb("intentions").$type<string[]>(),
+    meals: jsonb("meals").$type<{
+      breakfast?: string;
+      lunch?: string;
+      dinner?: string;
+      snacks?: string;
+    }>(),
+    midCheck: text("mid_check"),
+    eveningNote: text("evening_note"),
+    wins: text("wins"),
+    doneHabits: jsonb("done_habits").$type<string[]>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique().on(t.userId, t.date)],
+);
+
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  date: text("date").notNull(),
+  role: text("role").notNull().$type<"user" | "assistant">(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const recipes = pgTable("recipes", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  ingredients: text("ingredients"),
+  steps: text("steps"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type JournalEntry = InferSelectModel<typeof journalEntries>;
+export type Meals = NonNullable<JournalEntry["meals"]>;
+export type Recipe = InferSelectModel<typeof recipes>;
+export type ChatMessage = InferSelectModel<typeof chatMessages>;
