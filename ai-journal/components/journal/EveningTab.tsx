@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +48,11 @@ export default function EveningTab({
   const [wins, setWins] = useState("");
   const intentions = entry?.intentions ?? [];
 
+  const stateRef = useRef({ doneHabits, eveningNote, wins });
+  stateRef.current = { doneHabits, eveningNote, wins };
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
   useEffect(() => {
     if (entry) {
       setDoneHabits(entry.doneHabits ?? []);
@@ -55,6 +60,18 @@ export default function EveningTab({
       setWins(entry.wins ?? "");
     }
   }, [entry]);
+
+  useEffect(() => {
+    const flush = () => onSaveRef.current(stateRef.current);
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      flush();
+    };
+  }, []);
 
   const toggleHabit = async (habit: string) => {
     const isAdding = !doneHabits.includes(habit);

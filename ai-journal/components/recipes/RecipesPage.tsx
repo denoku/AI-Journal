@@ -19,11 +19,15 @@ export default function RecipesPage() {
 
   useEffect(() => {
     fetch("/api/recipes")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to fetch");
+        return r.json();
+      })
       .then((data) => {
-        setRecipes(data);
+        setRecipes(Array.isArray(data) ? data : []);
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const filtered =

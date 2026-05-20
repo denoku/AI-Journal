@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { chatMessages, journalEntries } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 import {
-  openai,
+  anthropic,
   JOURNAL_SYSTEM_PROMPT,
   buildJournalContext,
 } from "@/lib/claude";
@@ -12,7 +12,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  request: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ date: string }> },
 ) {
   const session = await auth();
@@ -35,7 +35,7 @@ export async function GET(
 }
 
 export async function POST(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ date: string }> },
 ) {
   const session = await auth();
@@ -43,7 +43,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { date } = await params;
-  const { content } = await request.json();
+  const { content } = await req.json();
 
   // Save user message
   await db.insert(chatMessages).values({
@@ -65,7 +65,7 @@ export async function POST(
     )
     .limit(1);
 
-  // Fetch chat history (excluding the message we just inserted)
+  // Fetch full chat history (including the message just saved)
   const history = await db
     .select()
     .from(chatMessages)
@@ -78,41 +78,38 @@ export async function POST(
     .orderBy(asc(chatMessages.createdAt));
 
   const journalContext = entry ? buildJournalContext(entry) : "";
-  const systemContent = journalContext
+  const systemPrompt = journalContext
     ? `${JOURNAL_SYSTEM_PROMPT}\n\n${journalContext}`
     : JOURNAL_SYSTEM_PROMPT;
 
-  // Build OpenAI message array (all history including the new user message)
-  const oaiMessages: { role: "user" | "assistant"; content: string }[] =
-    history.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+  const claudeMessages = history.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
 
   let fullResponse = "";
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const oaiStream = await openai.chat.completions.create({
-          model: "gpt-4o",
+        const claudeStream = anthropic.messages.stream({
+          model: "claude-sonnet-4-20250514",
           max_tokens: 1024,
-          stream: true,
-          messages: [
-            { role: "system", content: systemContent },
-            ...oaiMessages,
-          ],
+          system: systemPrompt,
+          messages: claudeMessages,
         });
 
-        for await (const chunk of oaiStream) {
-          const text = chunk.choices[0]?.delta?.content ?? "";
-          if (text) {
+        for await (const chunk of claudeStream) {
+          if (
+            chunk.type === "content_block_delta" &&
+            chunk.delta.type === "text_delta"
+          ) {
+            const text = chunk.delta.text;
             fullResponse += text;
             controller.enqueue(new TextEncoder().encode(text));
           }
         }
 
-        // Save assistant response
         await db.insert(chatMessages).values({
           userId: session.user.id,
           date,
@@ -122,7 +119,12 @@ export async function POST(
 
         controller.close();
       } catch (err) {
-        controller.error(err);
+        // Log server-side so you can see it in `npm run dev` terminal
+        console.error("[chat] stream error:", err);
+        // Send a readable error through the stream instead of dropping the connection
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        controller.enqueue(new TextEncoder().encode(`(Error: ${msg})`));
+        controller.close();
       }
     },
   });
