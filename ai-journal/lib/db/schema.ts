@@ -100,6 +100,19 @@ export const babyLogs = pgTable("baby_logs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Foods tried by baby
+export const babyFoods = pgTable("baby_foods", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  dateTried: text("date_tried").notNull(), // YYYY-MM-DD
+  reaction: text("reaction").$type<
+    "loved" | "liked" | "neutral" | "disliked" | "allergic"
+  >(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Generic key-value user settings (baby DOB, etc.)
 export const userSettings = pgTable(
   "user_settings",
@@ -113,6 +126,20 @@ export const userSettings = pgTable(
   (t) => [unique().on(t.userId, t.key)],
 );
 
+export const events = pgTable("events", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD (the exact date)
+  title: text("title").notNull(),
+  notes: text("notes"),
+  type: text("type")
+    .$type<"reminder" | "birthday" | "event">()
+    .notNull()
+    .default("reminder"),
+  isRecurring: boolean("is_recurring").default(false).notNull(), // true = repeats yearly (for birthdays)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type JournalEntry = InferSelectModel<typeof journalEntries>;
 export type Meals = NonNullable<JournalEntry["meals"]>;
 export type Recipe = InferSelectModel<typeof recipes>;
@@ -120,4 +147,6 @@ export type ChatMessage = InferSelectModel<typeof chatMessages>;
 export type CoffeeLog = InferSelectModel<typeof coffeeLogs>;
 export type Todo = InferSelectModel<typeof todos>;
 export type BabyLog = InferSelectModel<typeof babyLogs>;
+export type BabyFood = InferSelectModel<typeof babyFoods>;
 export type UserSetting = InferSelectModel<typeof userSettings>;
+export type CalendarEvent = InferSelectModel<typeof events>;

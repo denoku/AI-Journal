@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ChatPanel from "./ChatPanel";
 import TasksCard from "./TasksCard";
+import QuoteCard from "./QuoteCard";
+import AgendaCard from "./AgendaCard";
+import VoiceInput from "./VoiceInput";
 import { ALL_LIFE_AREAS, MAX_INTENTIONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { JournalEntry, Meals } from "@/lib/db/schema";
@@ -27,19 +30,23 @@ export default function MorningTab({
   const [intentions, setIntentions] = useState<string[]>([]);
   const [meals, setMeals] = useState<Meals>({});
 
+  // Only reinitialize form state when the date changes (new day loaded),
+  // not on every save update.
+  const initDateRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (entry && initDateRef.current !== date) {
+      initDateRef.current = date;
+      setMorningNote(entry.morningNote ?? "");
+      setIntentions(entry.intentions ?? []);
+      setMeals(entry.meals ?? {});
+    }
+  }, [entry, date]);
+
   // Always-current refs for flush-on-unmount
   const stateRef = useRef({ morningNote, intentions, meals });
   stateRef.current = { morningNote, intentions, meals };
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
-
-  useEffect(() => {
-    if (entry) {
-      setMorningNote(entry.morningNote ?? "");
-      setIntentions(entry.intentions ?? []);
-      setMeals(entry.meals ?? {});
-    }
-  }, [entry]);
 
   // Flush on unmount (SPA nav) and visibilitychange (switch apps on phone)
   useEffect(() => {
@@ -79,10 +86,22 @@ export default function MorningTab({
 
   return (
     <div className="space-y-4">
+      {/* Daily Quote */}
+      <QuoteCard date={date} />
+
       {/* Morning Note */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Morning note</CardTitle>
+          <CardTitle className="text-sm flex items-center justify-between">
+            Morning note
+            <VoiceInput
+              onTranscript={(t) => {
+                const next = morningNote ? morningNote + " " + t : t;
+                setMorningNote(next);
+                onDebouncedSave({ morningNote: next });
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
@@ -93,6 +112,7 @@ export default function MorningTab({
               setMorningNote(e.target.value);
               onDebouncedSave({ morningNote: e.target.value });
             }}
+            onBlur={() => onSave({ morningNote })}
             className="text-sm"
           />
         </CardContent>
@@ -146,16 +166,33 @@ export default function MorningTab({
               <Label className="text-xs text-muted-foreground capitalize mb-1 block">
                 {meal}
               </Label>
-              <Input
-                placeholder={`${meal.charAt(0).toUpperCase() + meal.slice(1)}...`}
-                value={meals[meal] ?? ""}
-                onChange={(e) => updateMeal(meal, e.target.value)}
-                className="text-sm"
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  placeholder={`${meal.charAt(0).toUpperCase() + meal.slice(1)}...`}
+                  value={meals[meal] ?? ""}
+                  onChange={(e) => updateMeal(meal, e.target.value)}
+                  onBlur={() => onSave({ meals })}
+                  className="text-sm"
+                />
+                <VoiceInput
+                  onTranscript={(t) => {
+                    const prev = meals[meal] ?? "";
+                    const next = {
+                      ...meals,
+                      [meal]: prev ? prev + " " + t : t,
+                    };
+                    setMeals(next);
+                    onDebouncedSave({ meals: next });
+                  }}
+                />
+              </div>
             </div>
           ))}
         </CardContent>
       </Card>
+
+      {/* Agenda */}
+      <AgendaCard date={date} />
 
       {/* Tasks */}
       <TasksCard date={date} />

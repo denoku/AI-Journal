@@ -48,7 +48,7 @@ export default function JournalPage({ date }: JournalPageProps) {
   const debouncedSave = useCallback(
     (updates: Partial<JournalEntry>) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => save(updates), 400);
+      saveTimeoutRef.current = setTimeout(() => save(updates), 1500);
     },
     [save],
   );

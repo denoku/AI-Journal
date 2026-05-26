@@ -15,6 +15,21 @@ interface Props {
 
 const BREW_METHODS = ["espresso", "pour over", "aeropress", "other"] as const;
 
+// Only these fields are editable — never send id/userId/date/slot/timestamps
+// to the API, as including `id` causes a PK conflict in the upsert.
+const EDITABLE_FIELDS = [
+  "beans",
+  "roaster",
+  "doseG",
+  "yieldG",
+  "timeSec",
+  "grindSetting",
+  "tastingNotes",
+  "rating",
+  "brewMethod",
+] as const;
+type EditableField = (typeof EDITABLE_FIELDS)[number];
+
 export default function CoffeeLogForm({ date, slot, label }: Props) {
   const [log, setLog] = useState<Partial<CoffeeLog>>({});
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
@@ -40,11 +55,20 @@ export default function CoffeeLogForm({ date, slot, label }: Props) {
     async (updates: Partial<CoffeeLog>) => {
       setSaveStatus("saving");
       try {
-        await fetch(`/api/coffee/${date}`, {
+        // Strip id/userId/date/slot/timestamps — sending `id` causes a PK
+        // conflict in the upsert that the ON CONFLICT (userId,date,slot)
+        // clause won't handle, making the save silently fail.
+        const payload: Partial<Record<EditableField, string>> = {};
+        EDITABLE_FIELDS.forEach((k) => {
+          const v = updates[k as keyof CoffeeLog];
+          if (v !== undefined) payload[k] = v as string;
+        });
+        const res = await fetch(`/api/coffee/${date}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ slot, ...updates }),
+          body: JSON.stringify({ slot, ...payload }),
         });
+        if (!res.ok) throw new Error(`Save failed: ${res.status}`);
         // Do NOT setLog(updated) here — that would overwrite in-progress edits
         setSaveStatus("saved");
         if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
@@ -69,6 +93,9 @@ export default function CoffeeLogForm({ date, slot, label }: Props) {
     document.addEventListener("visibilitychange", onHide);
     return () => {
       document.removeEventListener("visibilitychange", onHide);
+      // Cancel any pending debounce so it doesn't fire AFTER the flush
+      // and overwrite the save with a stale snapshot.
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
       flush();
     };
   }, []); // intentionally empty — uses refs
@@ -76,7 +103,7 @@ export default function CoffeeLogForm({ date, slot, label }: Props) {
   const debouncedSave = useCallback(
     (updates: Partial<CoffeeLog>) => {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
-      saveTimeout.current = setTimeout(() => save(updates), 400);
+      saveTimeout.current = setTimeout(() => save(updates), 1500);
     },
     [save],
   );

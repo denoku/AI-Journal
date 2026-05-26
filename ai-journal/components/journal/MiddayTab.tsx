@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import ChatPanel from "./ChatPanel";
 import TasksCard from "./TasksCard";
+import VoiceInput from "./VoiceInput";
 import type { JournalEntry } from "@/lib/db/schema";
 
 interface Props {
@@ -23,14 +24,20 @@ export default function MiddayTab({
   const [midCheck, setMidCheck] = useState("");
   const intentions = entry?.intentions ?? [];
 
+  // Only reinitialize form state when the date changes (new day loaded),
+  // not on every save update.
+  const initDateRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (entry && initDateRef.current !== date) {
+      initDateRef.current = date;
+      setMidCheck(entry.midCheck ?? "");
+    }
+  }, [entry, date]);
+
   const stateRef = useRef({ midCheck });
   stateRef.current = { midCheck };
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
-
-  useEffect(() => {
-    if (entry) setMidCheck(entry.midCheck ?? "");
-  }, [entry]);
 
   useEffect(() => {
     const flush = () => onSaveRef.current(stateRef.current);
@@ -74,7 +81,16 @@ export default function MiddayTab({
       {/* Midday Check-in */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Midday check-in</CardTitle>
+          <CardTitle className="text-sm flex items-center justify-between">
+            Midday check-in
+            <VoiceInput
+              onTranscript={(t) => {
+                const next = midCheck ? midCheck + " " + t : t;
+                setMidCheck(next);
+                onDebouncedSave({ midCheck: next });
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
@@ -85,6 +101,7 @@ export default function MiddayTab({
               setMidCheck(e.target.value);
               onDebouncedSave({ midCheck: e.target.value });
             }}
+            onBlur={() => onSave({ midCheck })}
             className="text-sm"
           />
         </CardContent>

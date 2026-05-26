@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { BabyLog } from "@/lib/db/schema";
-import { X, ChevronDown, ChevronUp } from "lucide-react";
+import type { BabyLog, BabyFood } from "@/lib/db/schema";
+import { X, ChevronDown, ChevronUp, Plus } from "lucide-react";
 
 // Wake window in minutes by age in weeks
 function getWakeWindow(ageWeeks: number): number {
@@ -82,17 +82,29 @@ export default function BabyPage() {
     return () => clearInterval(t);
   }, []);
 
+  const [foods, setFoods] = useState<BabyFood[]>([]);
+  const [showFoodForm, setShowFoodForm] = useState(false);
+  const [foodName, setFoodName] = useState("");
+  const [foodReaction, setFoodReaction] =
+    useState<BabyFood["reaction"]>("liked");
+  const [foodNotes, setFoodNotes] = useState("");
+  const [foodDate, setFoodDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   const loadData = useCallback(async () => {
     try {
-      const [settingsRes, logsRes] = await Promise.all([
+      const [settingsRes, logsRes, foodsRes] = await Promise.all([
         fetch("/api/baby/settings"),
         fetch("/api/baby/logs"),
+        fetch("/api/baby/foods"),
       ]);
       const settings = await settingsRes.json();
       const logsData: BabyLog[] = await logsRes.json();
+      const foodsData: BabyFood[] = await foodsRes.json();
       setBabyDob(settings.babyDob ?? null);
       setLogs(
         Array.isArray(logsData)
@@ -103,6 +115,7 @@ export default function BabyPage() {
             }))
           : [],
       );
+      setFoods(Array.isArray(foodsData) ? foodsData : []);
     } catch (e) {
       console.error("loadData error:", e);
     } finally {
@@ -157,6 +170,30 @@ export default function BabyPage() {
         },
       ].sort((a, b) => a.time.getTime() - b.time.getTime()),
     );
+  };
+
+  const addFood = async () => {
+    if (!foodName.trim()) return;
+    const res = await fetch("/api/baby/foods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: foodName.trim(),
+        dateTried: foodDate,
+        reaction: foodReaction,
+        notes: foodNotes.trim() || null,
+      }),
+    });
+    const food: BabyFood = await res.json();
+    setFoods((prev) => [food, ...prev]);
+    setFoodName("");
+    setFoodNotes("");
+    setShowFoodForm(false);
+  };
+
+  const deleteFood = async (id: number) => {
+    await fetch(`/api/baby/foods?id=${id}`, { method: "DELETE" });
+    setFoods((prev) => prev.filter((f) => f.id !== id));
   };
 
   const deleteLog = async (id: number) => {
@@ -477,6 +514,153 @@ export default function BabyPage() {
             No events logged today yet — tap a button above to start.
           </p>
         )}
+
+        {/* Foods tried */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">
+                Foods tried 🥕{" "}
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  ({foods.length})
+                </span>
+              </CardTitle>
+              <button
+                onClick={() => setShowFoodForm((v) => !v)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {showFoodForm && (
+              <div className="space-y-3 border border-border rounded-lg p-3">
+                <div>
+                  <Label className="text-xs mb-1 block">Food name</Label>
+                  <Input
+                    value={foodName}
+                    onChange={(e) => setFoodName(e.target.value)}
+                    placeholder="e.g. Sweet potato"
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">Date tried</Label>
+                  <Input
+                    type="date"
+                    value={foodDate}
+                    onChange={(e) => setFoodDate(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">Reaction</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { value: "loved", emoji: "❤️", label: "Loved" },
+                        { value: "liked", emoji: "😊", label: "Liked" },
+                        { value: "neutral", emoji: "😐", label: "Neutral" },
+                        { value: "disliked", emoji: "😕", label: "Disliked" },
+                        { value: "allergic", emoji: "⚠️", label: "Allergic" },
+                      ] as const
+                    ).map(({ value, emoji, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setFoodReaction(value)}
+                        className={cn(
+                          "px-2 py-1 rounded-lg text-xs border transition-colors",
+                          foodReaction === value
+                            ? "bg-primary/20 border-primary text-primary"
+                            : "border-border text-muted-foreground",
+                        )}
+                      >
+                        {emoji} {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">Notes (optional)</Label>
+                  <Input
+                    value={foodNotes}
+                    onChange={(e) => setFoodNotes(e.target.value)}
+                    placeholder="Any observations…"
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={addFood}
+                    disabled={!foodName.trim()}
+                    className="flex-1"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowFoodForm(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+            {foods.length === 0 && !showFoodForm && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                No foods logged yet — tap + to add one.
+              </p>
+            )}
+            {foods.map((food) => {
+              const reactionEmoji =
+                food.reaction === "loved"
+                  ? "❤️"
+                  : food.reaction === "liked"
+                    ? "😊"
+                    : food.reaction === "neutral"
+                      ? "😐"
+                      : food.reaction === "disliked"
+                        ? "😕"
+                        : food.reaction === "allergic"
+                          ? "⚠️"
+                          : "•";
+              return (
+                <div key={food.id} className="flex items-start gap-3 group">
+                  <span className="text-lg leading-none mt-0.5">
+                    {reactionEmoji}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{food.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {food.dateTried}
+                      </span>
+                      {food.reaction && (
+                        <span className="text-xs text-muted-foreground capitalize">
+                          · {food.reaction}
+                        </span>
+                      )}
+                    </div>
+                    {food.notes && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {food.notes}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => deleteFood(food.id)}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0 mt-0.5"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
 
         {/* Change DOB escape hatch */}
         <button

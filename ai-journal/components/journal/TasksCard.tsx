@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, X } from "lucide-react";
+import { Calendar, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Todo } from "@/lib/db/schema";
 
@@ -15,6 +15,8 @@ export default function TasksCard({ date }: Props) {
   const [tasks, setTasks] = useState<Todo[]>([]);
   const [newText, setNewText] = useState("");
   const [adding, setAdding] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,6 +48,28 @@ export default function TasksCard({ date }: Props) {
     }
   };
 
+  const addScheduledTask = async () => {
+    const text = newText.trim();
+    if (!text || !scheduleDate) return;
+    setAdding(true);
+    try {
+      const res = await fetch(`/api/tasks/${scheduleDate}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        setNewText("");
+        setScheduleDate("");
+        setShowSchedule(false);
+        // Show a brief confirmation — the task is for a different date so it
+        // won't appear in this list
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const toggle = async (id: number) => {
     const res = await fetch(`/api/tasks/${date}`, {
       method: "PUT",
@@ -71,12 +95,24 @@ export default function TasksCard({ date }: Props) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">
-          <span>Today's tasks</span>
-          {tasks.length > 0 && (
-            <span className="text-xs font-normal text-muted-foreground">
-              {complete.length}/{tasks.length} done
-            </span>
-          )}
+          <span>Today&apos;s tasks</span>
+          <div className="flex items-center gap-2">
+            {tasks.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground">
+                {complete.length}/{tasks.length} done
+              </span>
+            )}
+            <button
+              onClick={() => setShowSchedule((v) => !v)}
+              title="Schedule task for a future date"
+              className={cn(
+                "text-muted-foreground hover:text-foreground transition-colors",
+                showSchedule && "text-primary",
+              )}
+            >
+              <Calendar size={14} />
+            </button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -134,6 +170,54 @@ export default function TasksCard({ date }: Props) {
             </button>
           </div>
         ))}
+
+        {/* Schedule for future date */}
+        {showSchedule && (
+          <div className="border border-border/50 rounded-lg p-3 space-y-2 bg-secondary/30">
+            <p className="text-xs text-muted-foreground font-medium">
+              Schedule for another day
+            </p>
+            <input
+              type="date"
+              value={scheduleDate}
+              min={new Date(Date.now() + 86400000).toLocaleDateString("en-CA")}
+              onChange={(e) => setScheduleDate(e.target.value)}
+              className="w-full text-sm rounded-md border border-input bg-background px-3 py-1.5 outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="flex gap-2">
+              <Input
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addScheduledTask();
+                  }
+                }}
+                placeholder="Task description…"
+                className="text-sm h-8"
+              />
+              <Button
+                size="sm"
+                variant="default"
+                onClick={addScheduledTask}
+                disabled={!newText.trim() || !scheduleDate || adding}
+                className="shrink-0 h-8 px-3 text-xs"
+              >
+                Add
+              </Button>
+            </div>
+            {scheduleDate && newText.trim() && (
+              <p className="text-xs text-muted-foreground">
+                Will appear on{" "}
+                {new Date(scheduleDate + "T12:00:00").toLocaleDateString(
+                  "en-US",
+                  { weekday: "long", month: "short", day: "numeric" },
+                )}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Add task input */}
         <div className="flex gap-2 pt-1">

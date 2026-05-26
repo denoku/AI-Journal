@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import ChatPanel from "./ChatPanel";
+import VoiceInput from "./VoiceInput";
 import { TRACKED_HABITS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { toast } from "@/components/ui/use-toast";
@@ -48,18 +49,22 @@ export default function EveningTab({
   const [wins, setWins] = useState("");
   const intentions = entry?.intentions ?? [];
 
-  const stateRef = useRef({ doneHabits, eveningNote, wins });
-  stateRef.current = { doneHabits, eveningNote, wins };
-  const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
-
+  // Only reinitialize form state when the date changes (new day loaded),
+  // not on every save update.
+  const initDateRef = useRef<string | null>(null);
   useEffect(() => {
-    if (entry) {
+    if (entry && initDateRef.current !== date) {
+      initDateRef.current = date;
       setDoneHabits(entry.doneHabits ?? []);
       setEveningNote(entry.eveningNote ?? "");
       setWins(entry.wins ?? "");
     }
-  }, [entry]);
+  }, [entry, date]);
+
+  const stateRef = useRef({ doneHabits, eveningNote, wins });
+  stateRef.current = { doneHabits, eveningNote, wins };
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
 
   useEffect(() => {
     const flush = () => onSaveRef.current(stateRef.current);
@@ -147,7 +152,16 @@ export default function EveningTab({
       {/* Evening Reflection */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Evening reflection</CardTitle>
+          <CardTitle className="text-sm flex items-center justify-between">
+            Evening reflection
+            <VoiceInput
+              onTranscript={(t) => {
+                const next = eveningNote ? eveningNote + " " + t : t;
+                setEveningNote(next);
+                onDebouncedSave({ eveningNote: next });
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
@@ -167,7 +181,16 @@ export default function EveningTab({
       {/* Wins */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Wins today 🏆</CardTitle>
+          <CardTitle className="text-sm flex items-center justify-between">
+            Wins today 🏆
+            <VoiceInput
+              onTranscript={(t) => {
+                const next = wins ? wins + " " + t : t;
+                setWins(next);
+                onDebouncedSave({ wins: next });
+              }}
+            />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
