@@ -1,84 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import {
-  journalEntries,
-  chatMessages,
-  recipes,
-  coffeeLogs,
-  todos,
-  babyLogs,
-  userSettings,
-  babyFoods,
-  events,
-} from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/migrate — show current user ID and available old user IDs to merge
-// POST /api/migrate  body: { fromUserId: "old-uuid" } — migrate all data
-//
-// Usage after signing in fresh:
-//   1. GET /api/migrate  → see your new stable ID + old UUIDs with entry counts
-//   2. POST /api/migrate  { "fromUserId": "old-uuid-here" }  → moves all data over
-//   Repeat step 2 for each old UUID you want to absorb.
-
 const TABLES = [
-  { table: journalEntries, col: journalEntries.userId },
-  { table: chatMessages,   col: chatMessages.userId },
-  { table: recipes,        col: recipes.userId },
-  { table: coffeeLogs,     col: coffeeLogs.userId },
-  { table: todos,          col: todos.userId },
-  { table: babyLogs,       col: babyLogs.userId },
-  { table: userSettings,   col: userSettings.userId },
-  { table: babyFoods,      col: babyFoods.userId },
-  { table: events,         col: events.userId },
+  "journal_entries",
+  "chat_messages",
+  "recipes",
+  "coffee_logs",
+  "todos",
+  "baby_logs",
+  "user_settings",
+  "baby_foods",
+  "events",
 ] as const;
 
+// GET /api/migrate — see your current stable ID and all user IDs that have journal data
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const myId = session.user.id;
-
-  // Count rows per user_id across journal_entries so we can show what's out there
-  const counts = await db.execute(
-    sql`SELECT user_id, COUNT(*) as entries FROM journal_entries GROUP BY user_id ORDER BY entries DESC`
+  const rows = await db.execute(
+    sql`SELECT user_id, COUNT(*) as entries FROM journal_entries GROUP BY user_id ORDER BY entries DESC`,
   );
 
   return NextResponse.json({
-    yourCurrentId: myId,
-    allJournalUserIds: counts.rows,
+    yourCurrentId: session.user.id,
+    allJournalUserIds: rows.rows,
     instructions:
-      'POST to this endpoint with { "fromUserId": "<old-id>" } to migrate all data from that ID to yours.',
+      'POST { "fromUserId": "<old-id>" } to move all data from that ID to yours.',
   });
 }
 
+// POST /api/migrate — move every row from fromUserId to the current user's ID
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const myId = session.user.id;
-  const { fromUserId } = await request.json();
+  const body = await request.json();
+  const { fromUserId } = body as { fromUserId?: string };
 
-  if (!fromUserId || typeof fromUserId !== "string")
+  if (!fromUserId)
     return NextResponse.json({ error: "fromUserId required" }, { status: 400 });
 
   if (fromUserId === myId)
-    return NextResponse.json({ error: "fromUserId is already your current ID" }, { status: 400 });
+    return NextResponse.json(
+      { error: "fromUserId is already your current ID" },
+      { status: 400 },
+    );
 
   const results: Record<string, number> = {};
 
-  for (const { table, col } of TABLES) {
-    const result = await db
-      .update(table as typeof journalEntries)
-      .set({ userId: myId } as { userId: string })
-      .where(eq(col as typeof journalEntries.userId, fromUserId))
-      .returning();
-    results[table._.name] = result.length;
+  for (const table of TABLES) {
+    // sql.identifier safely quotes the table name; values are parameterised
+    const result = await db.execute(
+      sql`UPDATE ${sql.identifier(table)} SET user_id = ${myId} WHERE user_id = ${fromUserId}`,
+    );
+    results[table] = result.rowCount ?? 0;
   }
 
   return NextResponse.json({
