@@ -8,8 +8,10 @@ import {
   Coffee,
   ChefHat,
   CalendarDays,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signOut } from "next-auth/react";
 
 const nav = [
   { href: "/journal", icon: BookOpen, label: "Journal" },
@@ -43,6 +45,13 @@ export default function NavBar() {
             </Link>
           );
         })}
+        <button
+          onClick={() => signOut({ callbackUrl: "/signin" })}
+          className="flex flex-col items-center gap-1 px-3 py-2 text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+        >
+          <LogOut size={18} />
+          <span>Sign out</span>
+        </button>
       </div>
     </nav>
   );

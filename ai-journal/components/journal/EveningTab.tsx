@@ -65,9 +65,15 @@ export default function EveningTab({
   stateRef.current = { doneHabits, eveningNote, wins };
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  const isDirty = useRef(false);
 
   useEffect(() => {
-    const flush = () => onSaveRef.current(stateRef.current);
+    const flush = () => {
+      if (isDirty.current) {
+        isDirty.current = false;
+        onSaveRef.current(stateRef.current);
+      }
+    };
     const onHide = () => {
       if (document.visibilityState === "hidden") flush();
     };
@@ -79,6 +85,7 @@ export default function EveningTab({
   }, []);
 
   const toggleHabit = async (habit: string) => {
+    isDirty.current = true;
     const isAdding = !doneHabits.includes(habit);
     setDoneHabits((prev) => {
       const next = prev.includes(habit)
@@ -169,6 +176,7 @@ export default function EveningTab({
             value={eveningNote}
             rows={4}
             onChange={(e) => {
+              isDirty.current = true;
               setEveningNote(e.target.value);
               onDebouncedSave({ eveningNote: e.target.value });
             }}
@@ -198,6 +206,7 @@ export default function EveningTab({
             value={wins}
             rows={3}
             onChange={(e) => {
+              isDirty.current = true;
               setWins(e.target.value);
               onDebouncedSave({ wins: e.target.value });
             }}

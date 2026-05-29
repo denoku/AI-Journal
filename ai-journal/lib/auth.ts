@@ -10,8 +10,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: { strategy: "jwt" },
   callbacks: {
+    jwt({ token, account }) {
+      // Pin the user ID to the GitHub provider account ID (a stable numeric string
+      // like "12345678" tied to the GitHub account itself, not the device/session).
+      // Without this, NextAuth v5 generates a new random UUID per sign-in,
+      // so every device gets a different user ID and sees empty data.
+      if (account?.providerAccountId) {
+        token.sub = account.providerAccountId;
+      }
+      return token;
+    },
     session({ session, token }) {
-      // token.sub is the GitHub user ID string
       if (token.sub) session.user.id = token.sub;
       return session;
     },

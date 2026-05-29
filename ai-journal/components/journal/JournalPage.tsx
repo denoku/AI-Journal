@@ -6,11 +6,15 @@ import MiddayTab from "./MiddayTab";
 import EveningTab from "./EveningTab";
 import type { JournalEntry } from "@/lib/db/schema";
 
-interface JournalPageProps {
-  date: string;
-}
+interface JournalPageProps {}
 
-export default function JournalPage({ date }: JournalPageProps) {
+export default function JournalPage({}: JournalPageProps) {
+  // Compute date client-side so it always reflects the browser's local timezone,
+  // not the server's (which may be UTC and roll to the next day in the evening).
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    setDate(new Date().toLocaleDateString("en-CA"));
+  }, []);
   const [entry, setEntry] = useState<JournalEntry | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
     "idle",
@@ -19,9 +23,13 @@ export default function JournalPage({ date }: JournalPageProps) {
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!date) return; // wait for client-side date to be set
     fetch(`/api/journal/${date}`)
       .then((r) => r.json())
-      .then((data) => setEntry(data));
+      .then((data) => {
+        // Only store a valid entry — don't overwrite state with an error object
+        if (data && !data.error) setEntry(data);
+      });
   }, [date]);
 
   const save = useCallback(
@@ -53,11 +61,16 @@ export default function JournalPage({ date }: JournalPageProps) {
     [save],
   );
 
-  const displayDate = new Date(date + "T12:00:00").toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  const displayDate = date
+    ? new Date(date + "T12:00:00").toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })
+    : "";
+
+  // Don't render until we know the client's local date
+  if (!date) return <div className="min-h-screen bg-background" />;
 
   return (
     <div className="min-h-screen bg-background">

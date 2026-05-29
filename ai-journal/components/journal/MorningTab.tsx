@@ -47,10 +47,18 @@ export default function MorningTab({
   stateRef.current = { morningNote, intentions, meals };
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  // Only flush when the user has actually made edits — prevents a page load
+  // or tab switch BEFORE the fetch returns from saving blank state over real data.
+  const isDirty = useRef(false);
 
   // Flush on unmount (SPA nav) and visibilitychange (switch apps on phone)
   useEffect(() => {
-    const flush = () => onSaveRef.current(stateRef.current);
+    const flush = () => {
+      if (isDirty.current) {
+        isDirty.current = false;
+        onSaveRef.current(stateRef.current);
+      }
+    };
     const onHide = () => {
       if (document.visibilityState === "hidden") flush();
     };
@@ -62,6 +70,7 @@ export default function MorningTab({
   }, []); // intentionally empty — uses refs
 
   const toggleIntention = (area: string) => {
+    isDirty.current = true;
     setIntentions((prev) => {
       let next: string[];
       if (prev.includes(area)) {
@@ -77,6 +86,7 @@ export default function MorningTab({
   };
 
   const updateMeal = (key: keyof Meals, value: string) => {
+    isDirty.current = true;
     setMeals((prev) => {
       const next = { ...prev, [key]: value };
       onDebouncedSave({ meals: next });
@@ -96,6 +106,7 @@ export default function MorningTab({
             Morning note
             <VoiceInput
               onTranscript={(t) => {
+                isDirty.current = true;
                 const next = morningNote ? morningNote + " " + t : t;
                 setMorningNote(next);
                 onDebouncedSave({ morningNote: next });
@@ -109,6 +120,7 @@ export default function MorningTab({
             value={morningNote}
             rows={4}
             onChange={(e) => {
+              isDirty.current = true;
               setMorningNote(e.target.value);
               onDebouncedSave({ morningNote: e.target.value });
             }}

@@ -38,9 +38,15 @@ export default function MiddayTab({
   stateRef.current = { midCheck };
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  const isDirty = useRef(false);
 
   useEffect(() => {
-    const flush = () => onSaveRef.current(stateRef.current);
+    const flush = () => {
+      if (isDirty.current) {
+        isDirty.current = false;
+        onSaveRef.current(stateRef.current);
+      }
+    };
     const onHide = () => {
       if (document.visibilityState === "hidden") flush();
     };
@@ -85,6 +91,7 @@ export default function MiddayTab({
             Midday check-in
             <VoiceInput
               onTranscript={(t) => {
+                isDirty.current = true;
                 const next = midCheck ? midCheck + " " + t : t;
                 setMidCheck(next);
                 onDebouncedSave({ midCheck: next });
@@ -98,6 +105,7 @@ export default function MiddayTab({
             value={midCheck}
             rows={4}
             onChange={(e) => {
+              isDirty.current = true;
               setMidCheck(e.target.value);
               onDebouncedSave({ midCheck: e.target.value });
             }}
